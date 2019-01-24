@@ -1,0 +1,123 @@
+scilla_version 0
+
+import BoolUtils
+
+library Lock
+
+
+let one_msg =
+   fun (msg : Message) =>
+      let nil_msg = Nil {Message} in
+      Cons {Message} msg nil_msg
+
+
+let lockIdExist = 
+  fun (lockId : ByStr32) =>
+  fun (lockContractPreimage : Map ByStr32 String) =>
+   let contains =  builtin contains lockContractPreimage lockId in
+   match contains with
+   | True => True
+   | False => False
+   end
+
+let lockable =
+  fun (lockNum : Uint128) =>
+  fun (currentBlock : BNum) =>
+  fun (amount  : Uint128) =>
+    let zeroBNum = BNum 0 in
+    let zero = Uint128 0 in
+    let lockNumBlock = builtin badd zeroBNum lockNum in
+    let lockNumValid = builtin blt currentBlock lockNumBlock in
+    let amountValid  = builtin lt  zero amount in
+    andb amountValid  lockNumValid
+
+
+let lockSuccess = Int32 0
+let lockParamsNotValid = Int32 1
+let lockIdExist = Int32 2
+
+(******************************************************)
+(*           definition                               *)
+(******************************************************)
+
+contract Lock
+(owner : ByStr20)
+
+
+field lockContractSender : Map ByStr32 ByStr20 = Emp ByStr32 ByStr20
+
+field lockContractReceiver : Map ByStr32 ByStr20 = Emp ByStr32 ByStr20
+
+field lockContractAmount : Map ByStr32 Uint128 = Emp ByStr32 Uint128
+
+field lockContractHValue : Map ByStr32 ByStr32 = Emp ByStr32 ByStr32
+
+field lockContractNLockNum : Map ByStr32 Uint128 = Emp ByStr32 BNum
+
+field lockContractWithdrawn : Map ByStr32 Bool = Emp ByStr32 Bool
+
+field lockContractRefunded : Map ByStr32 Bool = Emp ByStr32 Bool
+
+field lockContractPreimage : Map ByStr32 String = Emp ByStr32 String
+
+transition newLock (receiver : ByStr20, hValue : ByStr32, nLockNum : Uint128)
+    
+    currentBlock <- & BLOCKNUMBER;
+
+    valid = lockable nLockNum currentBlock _amount;
+    match valid with
+    | True =>
+      nLockNumStr = builtin to_string nLockNum;
+      hash1 = builtin sha256hash nLockNumStr;
+
+      amountStr = builtin to_string _amount;
+      hash2 = builtin sha256hash amountStr;
+
+      hash3 = builtin sha256hash hValue;
+      hash4 = builtin sha256hash receiver;
+      merge1 = builtin concat hash1 hash2;
+      merge2 = builtin concat hash3 hash4;
+      merge = builtin concat merge1 merge2;
+      lockId = builtin sha256hash currentBlock;
+
+      exist = False;
+      match exist with 
+      | False =>
+        lockContractSender = builtin put lockContractSender lockId _sender;
+        lockContractReceiver = builtin put lockContractReceiver lockId receiver;
+        lockContractAmount = builtin put lockContractAmount lockId _amount;
+        lockContractHValue = builtin put lockContractHValue lockId hValue;
+        lockContractNLockNum = builtin put lockContractNLockNum lockId nLockNum;
+
+        isWithdrawn = False;
+        lockContractWithdrawn = builtin put lockContractWithdrawn lockId isWithdrawn;
+
+        isRefunded = False;
+        lockContractRefunded = builtin put lockContractRefunded lockId isRefunded;
+
+        e = { _eventname : "LogHTLCNew"; lockId : lockId; sender : _sender; receiver : receiver;
+            amount : _amount; hValue : hValue;  nLockNum: nLockNum};
+        event e
+      | True =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; msg : lockIdExist};
+        msgs = one_msg msg;
+        send msgs
+      end
+    | False =>
+      msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; msg : lockParamsNotValid};
+      msgs = one_msg msg;
+      send msgs
+    end
+end
+
+transition lockIdExist(lockId : ByStr32)
+     mapLCP <- lockContractPreimage;
+     exist = lockIdExist lockId mapLCP;
+     match exist with
+     | True =>
+        msg = {_tag : "Main"; _recipient : _sender; _amount : Uint128 0; msg : lockIdExist};
+        msgs = one_msg msg;
+        send msgs
+     end
+end
+

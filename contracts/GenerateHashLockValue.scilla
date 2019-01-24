@@ -1,0 +1,29 @@
+let nLockNum = Uint128 1000 in
+let amount = Uint128 200000000000000000 in
+let receiver = 0x1234567890123456789012345678901234567890 in
+let d = Int32 4 in
+let hValue =  builtin sha256hash d in
+
+let nLockNumStr = builtin to_string nLockNum in
+let hash1 = builtin sha256hash nLockNumStr in
+
+let amountStr = builtin to_string amount in
+let hash2 = builtin sha256hash amountStr in 
+
+
+let hash3 = builtin sha256hash hValue in
+
+let hash4 = builtin sha256hash receiver in 
+
+let merge1 = builtin concat hash1 hash2 in
+ 
+let merge2 = builtin concat hash3 hash4 in
+
+let merge = builtin concat merge1 merge2 in
+
+let result = builtin sha256hash merge in
+
+result 
+
+
+
